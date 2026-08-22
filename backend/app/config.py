@@ -79,7 +79,14 @@ MIN_RELEVANCE_THRESHOLD = float(os.getenv("MIN_RELEVANCE_THRESHOLD", "0.50"))
 ABSTENTION_MESSAGE = "I could not find sufficient information in the current knowledge base to answer this reliably."
 
 # Phase 4: FastAPI API Configuration
-CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "").strip()
+_default_origins = "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173"
+_configured_origins = os.getenv("CORS_ALLOWED_ORIGINS", _default_origins)
+if FRONTEND_ORIGIN and FRONTEND_ORIGIN not in _configured_origins:
+    CORS_ALLOWED_ORIGINS = f"{_configured_origins},{FRONTEND_ORIGIN}"
+else:
+    CORS_ALLOWED_ORIGINS = _configured_origins
+
 MAX_QUESTION_LENGTH = int(os.getenv("MAX_QUESTION_LENGTH", "2000"))
 
 # Phase 7: Knowledge Base Management & Dynamic Document Ingestion

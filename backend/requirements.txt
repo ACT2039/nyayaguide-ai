@@ -1,10 +1,18 @@
-# NyayaGuide AI — Ingestion & Retrieval Dependencies
+# NyayaGuide AI — Backend Dependencies
+
+# Ingestion, PDF Processing & Environment
 huggingface_hub>=0.20.0
 pymupdf>=1.23.0
 pypdf>=4.0.0
 python-dotenv>=1.0.0
 pydantic>=2.0.0
 requests>=2.31.0
+python-multipart>=0.0.6
+httpx>=0.24.0
+
+# FastAPI & ASGI Server
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
 
 # Phase 2: Embeddings & Vector Retrieval
 sentence-transformers>=2.3.0

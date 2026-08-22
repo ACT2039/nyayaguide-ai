@@ -1,0 +1,29 @@
+# NyayaGuide AI — Render Blueprint Configuration
+# Deploys the FastAPI application with persistent storage for knowledge-base documents, SQLite, and FAISS index.
+
+services:
+  - type: web
+    name: nyayaguide-backend
+    runtime: python
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "uvicorn backend.app.api.app:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+    disk:
+      name: nyayaguide-data
+      mountPath: /opt/render/project/src/backend/data
+      sizeGB: 10
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: "liquid/lfm-2.5-2.6b:free"
+      - key: HF_TOKEN
+        sync: false
+      - key: ADMIN_API_KEY
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
