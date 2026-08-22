@@ -1,0 +1,81 @@
+# ===================================================
+# NyayaGuide AI — Root Git Ignore Configuration
+# ===================================================
+
+# Environment variables & secrets (CRITICAL)
+.env
+*.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# Python cache, bytecode & packaging artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Cache directories
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Runtime knowledge-base data & databases (CRITICAL - Local Persistence Only)
+backend/data/
+backend/data/documents/
+backend/data/registry/
+backend/data/vector_store/
+*.db
+*.sqlite
+*.sqlite3
+*.bin
+*.tmp
+temp_downloads/
+local_vector_store/
+vector_index/
+chroma_db/
+faiss_index/
+
+# Node / Frontend artifacts
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Logs
+*.log
+
+# Nested duplicate/mirror directory (Preserve locally, ignore from VCS)
+nyayaguide_knowledge_base/
+
+# IDE & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

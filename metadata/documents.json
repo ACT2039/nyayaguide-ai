@@ -1,0 +1,35 @@
+{
+  "project": "NyayaGuide AI",
+  "purpose": "Canonical metadata and source registry for official Indian legal and civic documents in the RAG knowledge base.",
+  "dataset_repository": "charantejarangi123/govt_documents_rag_project",
+  "documents": [
+    {
+      "filename": "RTI_Act_2005.pdf",
+      "category": "RTI",
+      "title": "The Right to Information Act, 2005",
+      "source": "India Code",
+      "source_url": "https://cic.gov.in/sites/default/files/RTI-Act_English.pdf"
+    },
+    {
+      "filename": "RTI_Rules_2012.pdf",
+      "category": "RTI",
+      "title": "The Right to Information Rules, 2012",
+      "source": "Government of India / Central Information Commission",
+      "source_url": "https://nationalarchives.nic.in//sites/default/files/2023-08/RTIRules2012.pdf"
+    },
+    {
+      "filename": "Consumer_Protection_Act_2019.pdf",
+      "category": "CONSUMER",
+      "title": "The Consumer Protection Act, 2019",
+      "source": "Department of Consumer Affairs, Government of India",
+      "source_url": "https://egazette.gov.in/WriteReadData/2019/210422.pdf"
+    },
+    {
+      "filename": "Consumer_Commission_and_General_Rules_2020.pdf",
+      "category": "CONSUMER",
+      "title": "Consumer Protection (Consumer Disputes Redressal Commissions) Rules, 2020 and Consumer Protection (General) Rules, 2020",
+      "source": "Department of Consumer Affairs, Government of India",
+      "source_url": "https://egazette.gov.in/WriteReadData/2020/220555.pdf"
+    }
+  ]
+}
