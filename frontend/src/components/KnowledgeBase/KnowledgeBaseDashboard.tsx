@@ -7,10 +7,21 @@ import {
   Plus,
   ShieldCheck,
   Calendar,
-  CheckCircle2
+  CheckCircle2,
+  Key,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { DocumentItem, KnowledgeBaseStats } from '../../types/api';
-import { fetchDocuments, fetchStats, deleteDocument } from '../../services/api';
+import {
+  fetchDocuments,
+  fetchStats,
+  deleteDocument,
+  setStoredAdminKey,
+  hasCustomAdminKey,
+  clearStoredAdminKey
+} from '../../services/api';
 import { DocumentTable } from './DocumentTable';
 import { DocumentDetailsModal } from './DocumentDetailsModal';
 import { UploadDocumentModal } from './UploadDocumentModal';
@@ -27,6 +38,12 @@ export const KnowledgeBaseDashboard: React.FC = () => {
   const [deleteTargetDoc, setDeleteTargetDoc] = useState<DocumentItem | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  // Admin Key settings state
+  const [isAdminKeyModalOpen, setIsAdminKeyModalOpen] = useState<boolean>(false);
+  const [adminKeyInput, setAdminKeyInput] = useState<string>('');
+  const [hasCustomKey, setHasCustomKey] = useState<boolean>(hasCustomAdminKey());
+  const [showAdminKey, setShowAdminKey] = useState<boolean>(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -48,6 +65,22 @@ export const KnowledgeBaseDashboard: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleSaveAdminKey = () => {
+    setStoredAdminKey(adminKeyInput);
+    setHasCustomKey(hasCustomAdminKey());
+    setIsAdminKeyModalOpen(false);
+    setAdminKeyInput('');
+    loadData();
+  };
+
+  const handleClearAdminKey = () => {
+    clearStoredAdminKey();
+    setHasCustomKey(false);
+    setAdminKeyInput('');
+    setIsAdminKeyModalOpen(false);
+    loadData();
+  };
 
   const handleDeleteConfirm = async (doc: DocumentItem) => {
     setIsDeleting(true);
@@ -88,6 +121,14 @@ export const KnowledgeBaseDashboard: React.FC = () => {
           </p>
         </div>
         <div className="kb-header-actions">
+          <button
+            className={`btn btn-secondary ${hasCustomKey ? 'btn-key-active' : ''}`}
+            onClick={() => setIsAdminKeyModalOpen(true)}
+            title="Configure Admin Security Key for X-Admin-Key requests"
+          >
+            <Key size={16} />
+            <span>{hasCustomKey ? 'Admin Key Set' : 'Admin Key'}</span>
+          </button>
           <button
             className="btn btn-secondary btn-icon-only"
             onClick={loadData}
@@ -209,6 +250,116 @@ export const KnowledgeBaseDashboard: React.FC = () => {
         onClose={() => setDeleteTargetDoc(null)}
         onConfirm={handleDeleteConfirm}
       />
+
+      {/* Admin Key Settings Modal */}
+      {isAdminKeyModalOpen && (
+        <div
+          className="modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-key-modal-title"
+          onClick={() => setIsAdminKeyModalOpen(false)}
+        >
+          <div
+            className="modal-content"
+            style={{ maxWidth: '440px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div className="modal-title-group">
+                <div className="category-avatar avatar-primary">
+                  <Key size={20} />
+                </div>
+                <div>
+                  <h3 id="admin-key-modal-title" className="modal-title">
+                    Admin Key Settings
+                  </h3>
+                  <p className="modal-subtitle">
+                    Configure your secret ADMIN_API_KEY for X-Admin-Key header requests
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-body">
+              <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: '1.4' }}>
+                Enter the secret <code>ADMIN_API_KEY</code> configured on your Render backend server.
+                The key is saved <strong>only in your browser's session storage</strong> and sent via the <code>X-Admin-Key</code> header.
+              </p>
+
+              <div className="form-group">
+                <label htmlFor="admin-key-input" style={{ fontSize: '0.82rem', fontWeight: 700 }}>
+                  <Lock size={14} /> Production Admin Security Key
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="admin-key-input"
+                    type={showAdminKey ? 'text' : 'password'}
+                    placeholder="Enter production ADMIN_API_KEY..."
+                    value={adminKeyInput}
+                    onChange={(e) => setAdminKeyInput(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 2.4rem 0.55rem 0.75rem',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: '0.88rem'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminKey(!showAdminKey)}
+                    style={{
+                      position: 'absolute',
+                      right: '0.5rem',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    title={showAdminKey ? 'Hide key' : 'Show key'}
+                  >
+                    {showAdminKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+              {hasCustomKey ? (
+                <button
+                  type="button"
+                  className="btn btn-action-delete"
+                  onClick={handleClearAdminKey}
+                >
+                  Clear Key
+                </button>
+              ) : <div />}
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsAdminKeyModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSaveAdminKey}
+                >
+                  Save Key
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

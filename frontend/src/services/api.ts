@@ -18,7 +18,20 @@ export function getStoredAdminKey(): string {
 }
 
 export function setStoredAdminKey(key: string): void {
-  sessionStorage.setItem(ADMIN_KEY_STORAGE_KEY, key.trim());
+  const trimmed = key.trim();
+  if (trimmed) {
+    sessionStorage.setItem(ADMIN_KEY_STORAGE_KEY, trimmed);
+  } else {
+    sessionStorage.removeItem(ADMIN_KEY_STORAGE_KEY);
+  }
+}
+
+export function hasCustomAdminKey(): boolean {
+  return !!sessionStorage.getItem(ADMIN_KEY_STORAGE_KEY);
+}
+
+export function clearStoredAdminKey(): void {
+  sessionStorage.removeItem(ADMIN_KEY_STORAGE_KEY);
 }
 
 export async function askQuestion(question: string): Promise<AskResponse> {
