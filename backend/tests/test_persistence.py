@@ -82,8 +82,19 @@ class TestKnowledgeBasePersistence(unittest.TestCase):
         }
 
         upload_resp = self.client.post("/api/documents/upload", headers=self.admin_headers, files=files, data=data)
-        self.assertEqual(upload_resp.status_code, 200)
+        self.assertEqual(upload_resp.status_code, 202)
         doc_id = upload_resp.json()["document_id"]
+
+        # Wait for the document to be indexed by the background thread
+        import time
+        max_retries = 40
+        for _ in range(max_retries):
+            status_resp = self.client.get(f"/api/documents/{doc_id}/status", headers=self.admin_headers)
+            if status_resp.status_code == 200 and status_resp.json()["status"] == "INDEXED":
+                break
+            time.sleep(1)
+        else:
+            self.fail("Document background ingestion timed out during test.")
 
         # Verify it is in current SQLite registry
         reg1 = SQLiteDocumentRegistry()
