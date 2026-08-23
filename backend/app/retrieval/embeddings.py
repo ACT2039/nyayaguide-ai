@@ -74,7 +74,11 @@ class EmbeddingEngine:
                     except Exception:
                         pass
                     from sentence_transformers import SentenceTransformer
-                    self._model = SentenceTransformer(self.model_name, device="cpu")
+                    self._model = SentenceTransformer(
+                        self.model_name,
+                        device="cpu",
+                        model_kwargs={"low_cpu_mem_usage": True}
+                    )
                     _trim_memory()
         return self._model
 

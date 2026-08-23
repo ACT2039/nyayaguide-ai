@@ -58,11 +58,14 @@ async def health_check():
 async def ask_question(body: AskRequest, request: Request):
     """
     Delegates to the singleton NyayaRAGPipeline stored in app.state.
+    BGE embed_query + LLM call are CPU-heavy synchronous operations — run in thread pool
+    to avoid blocking the FastAPI/Uvicorn async event loop and Render health checks.
     """
+    from starlette.concurrency import run_in_threadpool
     pipeline = request.app.state.pipeline
 
     try:
-        rag_response = pipeline.ask(question=body.question)
+        rag_response = await run_in_threadpool(pipeline.ask, question=body.question)
 
         # Map SourceCitation → SourceCitationResponse (including source_url)
         sources = [
