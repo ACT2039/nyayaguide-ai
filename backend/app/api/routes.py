@@ -139,6 +139,7 @@ async def ask_question(body: AskRequest, request: Request):
 # ──────────────────────────────────────────────
 from typing import Optional, List
 from fastapi import UploadFile, File, Form, Depends, HTTPException, status, BackgroundTasks
+from starlette.concurrency import run_in_threadpool
 from .auth import require_admin_key
 from .schemas import (
     DocumentRecord,
@@ -271,16 +272,14 @@ async def upload_document(
     source_url: Optional[str] = Form(None, description="Official government gazette/document URL"),
     admin_key: str = Depends(require_admin_key)
 ):
-    """
-    Executes transactional dynamic ingestion and incremental FAISS indexing.
-    """
     document_service = request.app.state.document_service
     pipeline = request.app.state.pipeline
 
     try:
         file_bytes = await file.read()
         
-        record = document_service.process_and_index_document(
+        record = await run_in_threadpool(
+            document_service.process_and_index_document,
             file_bytes=file_bytes,
             original_filename=file.filename,
             category=category,

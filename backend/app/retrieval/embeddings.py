@@ -3,6 +3,7 @@ NyayaGuide AI — Embedding Engine
 Model: BAAI/bge-small-en-v1.5
 Strategy: L2-normalized dense vector embeddings for exact cosine similarity search.
 """
+import threading
 from typing import List, Optional, Any
 import numpy as np
 
@@ -23,6 +24,7 @@ class EmbeddingEngine:
     """
 
     _instance: Optional["EmbeddingEngine"] = None
+    _lock = threading.Lock()
 
     def __init__(self, model_name: str = EMBEDDING_MODEL_NAME, query_instruction: bool = True):
         self.model_name = model_name
@@ -34,21 +36,25 @@ class EmbeddingEngine:
     def get_instance(cls, model_name: str = EMBEDDING_MODEL_NAME) -> "EmbeddingEngine":
         """Get or create singleton instance of EmbeddingEngine to avoid repeated model loading."""
         if cls._instance is None or cls._instance.model_name != model_name:
-            cls._instance = cls(model_name=model_name)
+            with cls._lock:
+                if cls._instance is None or cls._instance.model_name != model_name:
+                    cls._instance = cls(model_name=model_name)
         return cls._instance
 
     @property
     def model(self) -> Any:
         """Lazy load and cache the SentenceTransformer model on demand with CPU memory optimizations."""
         if self._model is None:
-            import torch
-            try:
-                torch.set_num_threads(1)
-                torch.set_num_interop_threads(1)
-            except Exception:
-                pass
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(self.model_name)
+            with self._lock:
+                if self._model is None:
+                    import torch
+                    try:
+                        torch.set_num_threads(1)
+                        torch.set_num_interop_threads(1)
+                    except Exception:
+                        pass
+                    from sentence_transformers import SentenceTransformer
+                    self._model = SentenceTransformer(self.model_name)
         return self._model
 
     def embed_documents(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
