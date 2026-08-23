@@ -3,9 +3,8 @@ NyayaGuide AI — Embedding Engine
 Model: BAAI/bge-small-en-v1.5
 Strategy: L2-normalized dense vector embeddings for exact cosine similarity search.
 """
-from typing import List, Optional, Union
+from typing import List, Optional, Any
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from ..config import EMBEDDING_MODEL_NAME, EMBEDDING_DIMENSION
 
@@ -29,7 +28,7 @@ class EmbeddingEngine:
         self.model_name = model_name
         self.dimension = EMBEDDING_DIMENSION
         self.query_instruction = query_instruction
-        self._model: Optional[SentenceTransformer] = None
+        self._model: Optional[Any] = None
 
     @classmethod
     def get_instance(cls, model_name: str = EMBEDDING_MODEL_NAME) -> "EmbeddingEngine":
@@ -39,9 +38,16 @@ class EmbeddingEngine:
         return cls._instance
 
     @property
-    def model(self) -> SentenceTransformer:
-        """Lazy load and cache the SentenceTransformer model."""
+    def model(self) -> Any:
+        """Lazy load and cache the SentenceTransformer model on demand with CPU memory optimizations."""
         if self._model is None:
+            import torch
+            try:
+                torch.set_num_threads(1)
+                torch.set_num_interop_threads(1)
+            except Exception:
+                pass
+            from sentence_transformers import SentenceTransformer
             self._model = SentenceTransformer(self.model_name)
         return self._model
 
@@ -53,13 +59,15 @@ class EmbeddingEngine:
         if not texts:
             return np.empty((0, self.dimension), dtype=np.float32)
 
-        embeddings = self.model.encode(
-            texts,
-            batch_size=batch_size,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-            convert_to_numpy=True
-        )
+        import torch
+        with torch.inference_mode():
+            embeddings = self.model.encode(
+                texts,
+                batch_size=batch_size,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+                convert_to_numpy=True
+            )
         return embeddings.astype(np.float32)
 
     def embed_query(self, query: str) -> np.ndarray:
@@ -77,10 +85,12 @@ class EmbeddingEngine:
             if not query_text.startswith("Represent this sentence"):
                 query_text = f"Represent this sentence for searching relevant passages: {query_text}"
 
-        embedding = self.model.encode(
-            [query_text],
-            normalize_embeddings=True,
-            show_progress_bar=False,
-            convert_to_numpy=True
-        )
+        import torch
+        with torch.inference_mode():
+            embedding = self.model.encode(
+                [query_text],
+                normalize_embeddings=True,
+                show_progress_bar=False,
+                convert_to_numpy=True
+            )
         return embedding.astype(np.float32)
