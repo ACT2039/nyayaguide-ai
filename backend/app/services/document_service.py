@@ -25,6 +25,7 @@ from ..ingestion.metadata import MetadataRegistry
 from ..retrieval.embeddings import EmbeddingEngine
 from ..retrieval.vector_store import FAISSVectorStore
 from .document_registry import SQLiteDocumentRegistry
+from .hf_storage_service import HuggingFaceStorageService
 
 
 class DocumentService:
@@ -36,11 +37,13 @@ class DocumentService:
         self,
         registry: Optional[SQLiteDocumentRegistry] = None,
         embedding_engine: Optional[EmbeddingEngine] = None,
-        vector_store: Optional[FAISSVectorStore] = None
+        vector_store: Optional[FAISSVectorStore] = None,
+        storage_service: Optional[HuggingFaceStorageService] = None
     ):
         self.registry = registry or SQLiteDocumentRegistry()
         self.embedding_engine = embedding_engine or EmbeddingEngine.get_instance()
         self.vector_store = vector_store or FAISSVectorStore(dimension=EMBEDDING_DIMENSION)
+        self.storage_service = storage_service or HuggingFaceStorageService()
         self.documents_dir = Path(DOCUMENTS_DIR)
         self.documents_dir.mkdir(parents=True, exist_ok=True)
 
@@ -233,6 +236,10 @@ class DocumentService:
                 indexed_at=indexed_at
             )
 
+            # Step 8.5: Synchronize Knowledge Base snapshot to Hugging Face
+            if self.storage_service.is_available():
+                self.storage_service.sync_snapshot(new_pdf_path=stored_path)
+
             # Step 9: Hot-reload in-memory RAG pipeline if provided
             if pipeline_instance:
                 pipeline_instance.reload_index()
@@ -320,6 +327,10 @@ class DocumentService:
 
             # Step 3: Remove record from SQLite registry
             self.registry.delete_document(document_id)
+
+            # Step 3.5: Synchronize deletion to Hugging Face
+            if self.storage_service.is_available():
+                self.storage_service.sync_deletion(deleted_file_name=doc.stored_file_name)
 
             # Step 4: Hot-reload in-memory RAG pipeline if provided
             if pipeline_instance:

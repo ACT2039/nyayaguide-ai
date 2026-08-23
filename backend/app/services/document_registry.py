@@ -167,16 +167,24 @@ class SQLiteDocumentRegistry:
             conn.commit()
 
     def generate_document_id(self) -> str:
-        """Generates a standard sequential document ID, e.g. DOC-20260822-0005."""
+        """Generates a standard sequential document ID, e.g. DOC-20260823-0005."""
         today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
         prefix = f"DOC-{today_str}-"
         with self._get_connection() as conn:
             cursor = conn.execute(
-                "SELECT COUNT(*) as count FROM documents WHERE document_id LIKE ?",
+                "SELECT document_id FROM documents WHERE document_id LIKE ? ORDER BY document_id DESC LIMIT 1",
                 (f"{prefix}%",)
             )
-            count = cursor.fetchone()["count"] + 1
-            return f"{prefix}{count:04d}"
+            row = cursor.fetchone()
+            if row and row["document_id"]:
+                try:
+                    last_num = int(row["document_id"].split("-")[-1])
+                    new_num = last_num + 1
+                except ValueError:
+                    new_num = 1
+            else:
+                new_num = 1
+            return f"{prefix}{new_num:04d}"
 
     def get_by_id(self, document_id: str) -> Optional[DocumentRecord]:
         """Fetch a document record by its unique document ID."""

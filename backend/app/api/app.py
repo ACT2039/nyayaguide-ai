@@ -19,15 +19,27 @@ logger = logging.getLogger("nyayaguide.api")
 async def lifespan(application: FastAPI):
     """
     Application lifespan: initialize heavy resources once at startup, clean up at shutdown.
-    The NyayaRAGPipeline (embedding model, FAISS index, metadata, OpenRouter client)
-    is loaded exactly once and shared across all requests via app.state.
+    1. Restores latest persistent Knowledge Base snapshot from Hugging Face (if available).
+    2. Initializes the NyayaRAGPipeline (embedding model, FAISS index, metadata, OpenRouter client).
+    3. Initializes DocumentService with remote persistence.
     """
-    logger.info("Initializing NyayaGuide AI RAG Pipeline (singleton)...")
+    logger.info("Initializing NyayaGuide AI RAG Pipeline & Remote Persistence...")
+
+    from ..services.hf_storage_service import HuggingFaceStorageService
+    storage_service = HuggingFaceStorageService()
+    if storage_service.is_available():
+        try:
+            restored = storage_service.restore_latest_snapshot()
+            if restored:
+                logger.info("Cold-boot Knowledge Base snapshot restored successfully from Hugging Face.")
+        except Exception as restore_err:
+            logger.warning("Cold-boot snapshot restoration from Hugging Face notice: %s", restore_err)
+
     pipeline = NyayaRAGPipeline()
     application.state.pipeline = pipeline
 
     from ..services.document_service import DocumentService
-    document_service = DocumentService()
+    document_service = DocumentService(storage_service=storage_service)
     application.state.document_service = document_service
 
     logger.info(

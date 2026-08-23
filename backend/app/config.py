@@ -103,6 +103,7 @@ ALLOWED_CATEGORIES = [
     "OTHER"
 ]
 ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "nyayaguide_admin_secret_2026").strip()
+KB_PERSISTENCE_ENABLED = os.getenv("KB_PERSISTENCE_ENABLED", "true" if bool(HF_TOKEN and len(HF_TOKEN) > 5) else "false").lower() in ("true", "1", "yes")
 
 
 def is_hf_token_configured() -> bool:
