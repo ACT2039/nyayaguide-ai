@@ -1,4 +1,5 @@
 from typing import Optional, List, Dict, Any
+from enum import Enum
 from pydantic import BaseModel, Field
 
 
@@ -64,6 +65,22 @@ class SourceCitation(BaseModel):
     chunk_id: str = Field(..., description="ID of the chunk cited")
 
 
+class QueryResultState(str, Enum):
+    """
+    Precise classification of a RAG pipeline query result.
+    Distinguishes four states that must NOT be conflated:
+
+    ANSWERABLE                 - retrieved sufficient relevant context; answer generated.
+    OUT_OF_DOMAIN              - query is clearly unrelated to RTI or Consumer Protection.
+    IN_DOMAIN_BUT_INSUFFICIENT - query is in-domain but indexed context is insufficient.
+    KNOWLEDGE_BASE_UNAVAILABLE - FAISS index has 0 vectors; domain cannot be evaluated.
+    """
+    ANSWERABLE = "ANSWERABLE"
+    OUT_OF_DOMAIN = "OUT_OF_DOMAIN"
+    IN_DOMAIN_BUT_INSUFFICIENT = "IN_DOMAIN_BUT_INSUFFICIENT"
+    KNOWLEDGE_BASE_UNAVAILABLE = "KNOWLEDGE_BASE_UNAVAILABLE"
+
+
 class RAGResponse(BaseModel):
     """Structured response from the NyayaGuide AI RAG pipeline."""
     question: str = Field(..., description="User's original query")
@@ -74,6 +91,14 @@ class RAGResponse(BaseModel):
     model_used: Optional[str] = Field(default=None, description="LLM model identifier used for generation")
     top_score: float = Field(default=0.0, description="Highest similarity score among retrieved chunks")
     follow_up_questions: List[str] = Field(default_factory=list, description="3-4 suggested follow-up questions grounded in the context")
+    query_result_state: Optional[QueryResultState] = Field(
+        default=None,
+        description=(
+            "Precise classification: ANSWERABLE | OUT_OF_DOMAIN | "
+            "IN_DOMAIN_BUT_INSUFFICIENT | KNOWLEDGE_BASE_UNAVAILABLE. "
+            "None for responses generated before this field was introduced."
+        )
+    )
 
 
 class IngestionSummary(BaseModel):
