@@ -4,9 +4,32 @@ import { AlertCircle, HelpCircle } from 'lucide-react';
 interface AbstentionNoticeProps {
   message: string;
   onSelectExample?: (q: string) => void;
+  currentQuestion?: string;
 }
 
-export const AbstentionNotice: React.FC<AbstentionNoticeProps> = ({ message, onSelectExample }) => {
+// Normalise a string for duplicate detection:
+// lowercase, trim, collapse whitespace, remove trailing punctuation
+function normaliseQ(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[?!.,;]+$/, '');
+}
+
+export const AbstentionNotice: React.FC<AbstentionNoticeProps> = ({ message, onSelectExample, currentQuestion }) => {
+  const normCurrent = currentQuestion ? normaliseQ(currentQuestion) : '';
+
+  // Hardcoded suggestions — filtered if they match the current question
+  const suggestions: Array<{ label: string; question: string }> = [
+    { label: 'How can I file an RTI application?', question: 'How can I file an RTI application?' },
+    { label: 'What are my rights as a consumer?', question: 'What are my rights as a consumer?' },
+  ];
+
+  const visibleSuggestions = suggestions.filter(
+    (s) => normaliseQ(s.question) !== normCurrent
+  );
+
   return (
     <div className="abstention-container" role="alert">
       <div className="abstention-icon-box">
@@ -21,25 +44,21 @@ export const AbstentionNotice: React.FC<AbstentionNoticeProps> = ({ message, onS
           </p>
           <ul className="guidance-list">
             <li><strong>Right to Information:</strong> RTI Act 2005, RTI Rules 2012</li>
-            <li><strong>Consumer Protection:</strong> CPA 2019, Consumer Commission & General Rules 2020</li>
+            <li><strong>Consumer Protection:</strong> CPA 2019, Consumer Commission &amp; General Rules 2020</li>
           </ul>
-          {onSelectExample && (
+          {onSelectExample && visibleSuggestions.length > 0 && (
             <div className="guidance-actions">
               <span className="try-label">Try asking:</span>
-              <button
-                type="button"
-                className="guidance-btn"
-                onClick={() => onSelectExample("How can I file an RTI application?")}
-              >
-                <HelpCircle size={13} /> How can I file an RTI application?
-              </button>
-              <button
-                type="button"
-                className="guidance-btn"
-                onClick={() => onSelectExample("What are my rights as a consumer?")}
-              >
-                <HelpCircle size={13} /> What are my rights as a consumer?
-              </button>
+              {visibleSuggestions.map((s) => (
+                <button
+                  key={s.question}
+                  type="button"
+                  className="guidance-btn"
+                  onClick={() => onSelectExample(s.question)}
+                >
+                  <HelpCircle size={13} /> {s.label}
+                </button>
+              ))}
             </div>
           )}
         </div>

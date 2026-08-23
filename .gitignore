@@ -50,10 +50,14 @@ backend/data/
 backend/data/documents/
 backend/data/registry/
 backend/data/vector_store/
+# Exception: baseline FAISS vector index + metadata are committed so Render always has them on disk
+!backend/data/vector_store/faiss_index.bin
+!backend/data/vector_store/chunks_metadata.json
 *.db
 *.sqlite
 *.sqlite3
-*.bin
+# Exception: the FAISS index binary must be tracked (overrides *.bin above)
+!backend/data/vector_store/faiss_index.bin
 *.tmp
 temp_downloads/
 local_vector_store/

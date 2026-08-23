@@ -83,6 +83,7 @@ export const MessageList: React.FC<MessageListProps> = ({ turns, onSelectFollowU
                     <AbstentionNotice
                       message={turn.response.answer}
                       onSelectExample={onSelectFollowUp}
+                      currentQuestion={turn.question}
                     />
                   ) : (
                     <>
