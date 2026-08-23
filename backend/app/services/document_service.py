@@ -7,9 +7,12 @@ import os
 import re
 import shutil
 import hashlib
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
+
+logger = logging.getLogger("nyayaguide.document_service")
 
 from ..config import (
     DOCUMENTS_DIR,
@@ -94,7 +97,7 @@ class DocumentService:
         """Computes the SHA-256 hexadecimal digest of the file bytes."""
         return hashlib.sha256(file_bytes).hexdigest()
 
-    def process_and_index_document(
+    def initiate_document_upload(
         self,
         file_bytes: bytes,
         original_filename: str,
@@ -103,23 +106,13 @@ class DocumentService:
         source: Optional[str] = None,
         authority: Optional[str] = None,
         source_url: Optional[str] = None,
-        pipeline_instance: Optional[Any] = None,
-        background_tasks: Optional[Any] = None
+        background_tasks: Optional[Any] = None,
+        pipeline_instance: Optional[Any] = None
     ) -> DocumentRecord:
         """
-        Complete transactional ingestion workflow for a newly uploaded PDF:
-        1. Validate file and category
-        2. Check SHA-256 duplicate
-        3. Securely store PDF on disk
-        4. Register record in SQLite (status: PROCESSING)
-        5. Parse PDF (status: PROCESSING)
-        6. Chunk document (status: PROCESSING)
-        7. Embed chunks (status: EMBEDDING)
-        8. Incrementally update FAISS index (status: INDEXING)
-        9. Persist FAISS and metadata
-        10. Update SQLite (status: INDEXED)
-        11. Hot-reload RAG pipeline in-memory
-        12. Queue Hugging Face remote persistence in background
+        Fast synchronous validation, SHA-256 duplicate check, and disk storage.
+        Creates initial SQLite record with status PROCESSING, queues background ingestion,
+        and returns immediately (< 0.2s).
         """
         # Step 1: Validation
         self.validate_file(original_filename, file_bytes)
@@ -136,7 +129,7 @@ class DocumentService:
                 f"Document already exists in the knowledge base (Document ID: {existing_doc.document_id}, Title: '{existing_doc.title}')."
             )
 
-        # Step 3: Secure Storage
+        # Step 3: Secure Disk Storage
         safe_name = self.sanitize_filename(original_filename)
         doc_id = self.registry.generate_document_id()
         stored_filename = f"{doc_id}_{safe_name}"
@@ -178,16 +171,62 @@ class DocumentService:
         # Register in SQLite
         self.registry.create_document(record)
 
+        # Step 4: Queue or execute background ingestion
+        if background_tasks is not None and hasattr(background_tasks, "add_task"):
+            background_tasks.add_task(
+                self.run_background_ingestion,
+                doc_id=doc_id,
+                stored_path=stored_path,
+                original_filename=safe_name,
+                category_clean=category_clean,
+                doc_title=doc_title,
+                doc_source=doc_source,
+                pipeline_instance=pipeline_instance
+            )
+        else:
+            # Synchronous execution fallback when background_tasks is not provided (e.g. unit tests)
+            self.run_background_ingestion(
+                doc_id=doc_id,
+                stored_path=stored_path,
+                original_filename=safe_name,
+                category_clean=category_clean,
+                doc_title=doc_title,
+                doc_source=doc_source,
+                pipeline_instance=pipeline_instance
+            )
+            # Re-fetch updated record to return status for synchronous test callers
+            updated = self.registry.get_by_id(doc_id)
+            if updated:
+                if updated.status == DocumentStatus.FAILED:
+                    raise RuntimeError(f"Document ingestion failed: {updated.error_message}")
+                return updated
+
+        return record
+
+    def run_background_ingestion(
+        self,
+        doc_id: str,
+        stored_path: Path,
+        original_filename: str,
+        category_clean: str,
+        doc_title: str,
+        doc_source: str,
+        pipeline_instance: Optional[Any] = None
+    ) -> None:
+        """
+        Executes heavy background PDF parsing, legal chunking, BGE embedding, FAISS indexing,
+        RAG pipeline hot-reloading, and Hugging Face remote snapshot synchronization.
+        Safely catches exceptions and sets DocumentStatus.FAILED on failure.
+        """
         try:
-            # Step 4: Parse PDF
+            logger.info("Starting background ingestion for document '%s' (%s)...", doc_id, original_filename)
             self.registry.update_status(doc_id, DocumentStatus.PROCESSING)
-            parsed_doc = self.pdf_parser.parse_pdf(stored_path, filename=safe_name)
-            
-            # Override title & category with user-provided parameters
+
+            # Step 1: Parse PDF
+            parsed_doc = self.pdf_parser.parse_pdf(stored_path, filename=original_filename)
             parsed_doc.category = category_clean
             parsed_doc.title = doc_title
             parsed_doc.source = doc_source
-            parsed_doc.source_url = record.source_url
 
             if parsed_doc.total_pages == 0:
                 raise ValueError("PDF contains 0 pages or could not be parsed.")
@@ -196,7 +235,7 @@ class DocumentService:
             if empty_pages_count == parsed_doc.total_pages:
                 raise ValueError("PDF appears to be scanned or contains no extractable text.")
 
-            # Step 5: Chunk document
+            # Step 2: Legal Chunking
             chunks = self.chunker.chunk_document(parsed_doc)
             if not chunks:
                 raise ValueError("No valid legal chunks could be extracted from this document.")
@@ -208,27 +247,20 @@ class DocumentService:
                 chunk_count=len(chunks)
             )
 
-            # Step 6: Generate Embeddings
+            # Step 3: BGE Embeddings
             texts = [c.text for c in chunks]
             embeddings = self.embedding_engine.embed_documents(texts)
 
             if len(embeddings) != len(chunks):
                 raise RuntimeError(f"Embedding count mismatch: {len(embeddings)} vs {len(chunks)} chunks.")
 
-            # Step 7: Transactional FAISS Incremental Update
+            # Step 4: Transactional FAISS Incremental Indexing
             self.registry.update_status(doc_id, DocumentStatus.INDEXING)
-
-            # Ensure existing vector store is loaded from disk before appending
             self.vector_store.load()
-            initial_vector_count = self.vector_store.total_vectors
-
-            # Append new vectors and metadata
             self.vector_store.add_documents(chunks, embeddings)
-
-            # Persist FAISS and metadata to disk
             self.vector_store.save()
 
-            # Step 8: Update SQLite status to INDEXED
+            # Step 5: Update SQLite status to INDEXED
             indexed_at = datetime.now(timezone.utc).isoformat()
             self.registry.update_status(
                 doc_id,
@@ -238,34 +270,58 @@ class DocumentService:
                 indexed_at=indexed_at
             )
 
-            # Step 8.5: Synchronize Knowledge Base snapshot to Hugging Face (in background if available)
-            if self.storage_service.is_available():
-                if background_tasks is not None and hasattr(background_tasks, "add_task"):
-                    background_tasks.add_task(self.storage_service.sync_snapshot, stored_path)
-                else:
-                    self.storage_service.sync_snapshot(new_pdf_path=stored_path)
-
-            # Step 9: Hot-reload in-memory RAG pipeline if provided
+            # Step 6: Hot-reload in-memory RAG pipeline
             if pipeline_instance:
                 pipeline_instance.reload_index()
 
-            record.status = DocumentStatus.INDEXED
-            record.page_count = parsed_doc.total_pages
-            record.chunk_count = len(chunks)
-            record.indexed_at = indexed_at
-            return record
+            logger.info("Background ingestion completed successfully for document '%s'. Status: INDEXED.", doc_id)
+
+            # Step 7: Synchronize Knowledge Base snapshot to Hugging Face
+            if self.storage_service.is_available():
+                try:
+                    self.storage_service.sync_snapshot(new_pdf_path=stored_path)
+                except Exception as hf_err:
+                    logger.warning("Hugging Face snapshot sync notice for '%s': %s", doc_id, hf_err)
 
         except Exception as e:
-            # Mark document as FAILED in SQLite
+            logger.error("Background ingestion failed for document '%s': %s", doc_id, e)
             safe_error = str(e)
             self.registry.update_status(
                 doc_id,
                 DocumentStatus.FAILED,
                 error_message=safe_error
             )
-            # Reload vector store to discard any unsaved in-memory state
-            self.vector_store.load()
-            raise RuntimeError(f"Document ingestion failed: {safe_error}") from e
+            try:
+                self.vector_store.load()
+            except Exception:
+                pass
+
+    def process_and_index_document(
+        self,
+        file_bytes: bytes,
+        original_filename: str,
+        category: str,
+        title: Optional[str] = None,
+        source: Optional[str] = None,
+        authority: Optional[str] = None,
+        source_url: Optional[str] = None,
+        pipeline_instance: Optional[Any] = None,
+        background_tasks: Optional[Any] = None
+    ) -> DocumentRecord:
+        """
+        Backward-compatible wrapper method around initiate_document_upload.
+        """
+        return self.initiate_document_upload(
+            file_bytes=file_bytes,
+            original_filename=original_filename,
+            category=category,
+            title=title,
+            source=source,
+            authority=authority,
+            source_url=source_url,
+            background_tasks=background_tasks,
+            pipeline_instance=pipeline_instance
+        )
 
     def get_document_status(self, document_id: str) -> Optional[DocumentStatusResponse]:
         """Returns the processing and indexing status of a document."""

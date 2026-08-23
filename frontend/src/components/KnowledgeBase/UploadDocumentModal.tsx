@@ -8,7 +8,7 @@ import {
   Loader2,
   Bookmark
 } from 'lucide-react';
-import { uploadDocument, UploadMetadata } from '../../services/api';
+import { uploadDocument, fetchDocumentStatus, UploadMetadata } from '../../services/api';
 
 interface UploadDocumentModalProps {
   isOpen: boolean;
@@ -111,24 +111,73 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
     };
 
     try {
-      // Simulate realistic visual progress stage progression while upload & indexing happens
-      const interval = setInterval(() => {
-        setCurrentStageIndex((prev) => (prev < 4 ? prev + 1 : prev));
-      }, 700);
-
       const resp = await uploadDocument(file, metadata);
-      clearInterval(interval);
-      setCurrentStageIndex(5); // Completed
 
-      setSuccessInfo({
-        docId: resp.document_id,
-        pages: resp.page_count,
-        chunks: resp.chunk_count
-      });
-      onSuccess();
+      if (resp.status === 'INDEXED') {
+        setCurrentStageIndex(5); // Completed
+        setSuccessInfo({
+          docId: resp.document_id,
+          pages: resp.page_count,
+          chunks: resp.chunk_count
+        });
+        onSuccess();
+        setLoading(false);
+        return;
+      }
+
+      // Status is PROCESSING -> Poll status until INDEXED or FAILED
+      setCurrentStageIndex(1); // Extracting & Cleaning Text
+
+      let attempts = 0;
+      const maxAttempts = 120; // 6 minutes max
+
+      const checkStatus = async () => {
+        try {
+          const statusResp = await fetchDocumentStatus(resp.document_id);
+
+          if (statusResp.status === 'PROCESSING') {
+            setCurrentStageIndex(1);
+          } else if (statusResp.status === 'EMBEDDING') {
+            setCurrentStageIndex(3);
+          } else if (statusResp.status === 'INDEXING') {
+            setCurrentStageIndex(4);
+          } else if (statusResp.status === 'INDEXED') {
+            setCurrentStageIndex(5);
+            setSuccessInfo({
+              docId: resp.document_id,
+              pages: statusResp.page_count,
+              chunks: statusResp.chunk_count
+            });
+            onSuccess();
+            setLoading(false);
+            return;
+          } else if (statusResp.status === 'FAILED') {
+            setError(statusResp.error_message || 'Background document processing failed.');
+            setLoading(false);
+            return;
+          }
+
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(checkStatus, 3000);
+          } else {
+            setError('Ingestion is taking longer than expected. Please check dashboard status.');
+            setLoading(false);
+          }
+        } catch (pollErr: any) {
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(checkStatus, 3000);
+          } else {
+            setError(pollErr.message || 'Error checking processing status.');
+            setLoading(false);
+          }
+        }
+      };
+
+      setTimeout(checkStatus, 2000);
     } catch (err: any) {
       setError(err.message || 'Failed to upload and index document.');
-    } finally {
       setLoading(false);
     }
   };

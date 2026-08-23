@@ -146,7 +146,8 @@ from .schemas import (
     KnowledgeBaseStats,
     DocumentUploadResponse,
     DocumentStatusResponse,
-    DocumentDeleteResponse
+    DocumentDeleteResponse,
+    DocumentStatus
 )
 
 
@@ -247,11 +248,12 @@ async def get_document_status(
 @router.post(
     "/api/documents/upload",
     response_model=DocumentUploadResponse,
+    status_code=status.HTTP_202_ACCEPTED,
     summary="Upload and Ingest Government PDF",
     description=(
-        "Uploads a new Government of India legal PDF, extracts text, generates legal chunks with section references, "
-        "computes BGE-small embeddings, incrementally updates the FAISS index, persists metadata, updates the SQLite registry, "
-        "and hot-reloads the RAG pipeline for immediate retrieval."
+        "Uploads a new Government of India legal PDF, validates SHA-256 duplicate status, registers an initial record, "
+        "and initiates asynchronous background PDF parsing, legal chunking, BGE embedding, FAISS indexing, "
+        "SQLite registry status updating, and Hugging Face snapshot synchronization."
     ),
     responses={
         400: {"model": ErrorResponse, "description": "Invalid file format, size, or category"},
@@ -279,7 +281,7 @@ async def upload_document(
         file_bytes = await file.read()
         
         record = await run_in_threadpool(
-            document_service.process_and_index_document,
+            document_service.initiate_document_upload,
             file_bytes=file_bytes,
             original_filename=file.filename,
             category=category,
@@ -287,8 +289,14 @@ async def upload_document(
             source=source,
             authority=authority,
             source_url=source_url,
-            pipeline_instance=pipeline,
-            background_tasks=background_tasks
+            background_tasks=background_tasks,
+            pipeline_instance=pipeline
+        )
+
+        message = (
+            "Document upload accepted. Heavy parsing, BGE embedding, and FAISS indexing are running in the background."
+            if record.status == DocumentStatus.PROCESSING
+            else "Document successfully processed and indexed into FAISS."
         )
 
         return DocumentUploadResponse(
@@ -296,7 +304,7 @@ async def upload_document(
             original_file_name=record.original_file_name,
             status=record.status,
             uploaded_at=record.uploaded_at,
-            message="Document successfully processed, indexed into FAISS, and available for queries.",
+            message=message,
             page_count=record.page_count,
             chunk_count=record.chunk_count
         )
