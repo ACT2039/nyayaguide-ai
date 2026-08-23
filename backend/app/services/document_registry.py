@@ -8,6 +8,7 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+from contextlib import contextmanager
 
 from ..config import (
     REGISTRY_DB_PATH,
@@ -84,11 +85,15 @@ class SQLiteDocumentRegistry:
         self._init_db()
         self._seed_baseline_documents()
 
-    def _get_connection(self) -> sqlite3.Connection:
-        """Create a sqlite3 connection with Row factory enabled."""
+    @contextmanager
+    def _get_connection(self):
+        """Yield a sqlite3 connection with Row factory enabled, closing it safely upon exit."""
         conn = sqlite3.connect(str(self.db_path), timeout=20.0)
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def _init_db(self) -> None:
         """Create the documents table if it does not already exist."""

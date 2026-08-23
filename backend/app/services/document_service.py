@@ -247,9 +247,15 @@ class DocumentService:
                 chunk_count=len(chunks)
             )
 
-            # Step 3: BGE Embeddings (batch_size=4 for 512 MiB RAM limit)
+            # Explicit memory cleanup before heavy BGE embedding
+            total_pages_count = parsed_doc.total_pages
+            del parsed_doc
+            import gc
+            gc.collect()
+
+            # Step 3: BGE Embeddings (batch_size=2 for 512 MiB RAM limit)
             texts = [c.text for c in chunks]
-            embeddings = self.embedding_engine.embed_documents(texts, batch_size=4)
+            embeddings = self.embedding_engine.embed_documents(texts, batch_size=2)
 
             if len(embeddings) != len(chunks):
                 raise RuntimeError(f"Embedding count mismatch: {len(embeddings)} vs {len(chunks)} chunks.")
@@ -265,7 +271,7 @@ class DocumentService:
             self.registry.update_status(
                 doc_id,
                 DocumentStatus.INDEXED,
-                page_count=parsed_doc.total_pages,
+                page_count=total_pages_count,
                 chunk_count=len(chunks),
                 indexed_at=indexed_at
             )
