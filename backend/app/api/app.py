@@ -42,21 +42,6 @@ async def lifespan(application: FastAPI):
     document_service = DocumentService(storage_service=storage_service)
     application.state.document_service = document_service
 
-    # Warm up singleton EmbeddingEngine in background thread so model is ready before first upload/query
-    import asyncio
-    from starlette.concurrency import run_in_threadpool
-    from ..retrieval.embeddings import EmbeddingEngine
-
-    async def _warmup_bge():
-        try:
-            engine = EmbeddingEngine.get_instance()
-            await run_in_threadpool(lambda: engine.model)
-            logger.info("EmbeddingEngine BGE model pre-warmup completed.")
-        except Exception as w_err:
-            logger.warning("BGE model warmup notice: %s", w_err)
-
-    asyncio.create_task(_warmup_bge())
-
     logger.info(
         "RAG Pipeline & Document Management ready. Model: %s, FAISS vectors loaded, SQLite registry synced.",
         OPENROUTER_MODEL,
