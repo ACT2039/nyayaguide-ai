@@ -2,8 +2,17 @@
 NyayaGuide AI — FastAPI Application
 Creates the FastAPI app, configures CORS, and initializes the singleton RAG pipeline.
 """
+import os
 import logging
 from contextlib import asynccontextmanager
+
+# Strict single-threaded CPU memory environment variables to prevent OOM (Exit status 137) on 512 MB Render Free Tier
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

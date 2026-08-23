@@ -3,11 +3,23 @@ NyayaGuide AI — Embedding Engine
 Model: BAAI/bge-small-en-v1.5
 Strategy: L2-normalized dense vector embeddings for exact cosine similarity search.
 """
+import os
+import gc
+import ctypes
 import threading
 from typing import List, Optional, Any
 import numpy as np
 
 from ..config import EMBEDDING_MODEL_NAME, EMBEDDING_DIMENSION
+
+
+def _trim_memory():
+    """Forces Linux glibc memory allocator to release unmapped heap memory arenas back to the OS kernel."""
+    gc.collect()
+    try:
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:
+        pass
 
 
 class EmbeddingEngine:
@@ -47,6 +59,14 @@ class EmbeddingEngine:
         if self._model is None:
             with self._lock:
                 if self._model is None:
+                    # Enforce strict single-threaded CPU memory environment variables
+                    os.environ["OMP_NUM_THREADS"] = "1"
+                    os.environ["MKL_NUM_THREADS"] = "1"
+                    os.environ["OPENBLAS_NUM_THREADS"] = "1"
+                    os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+                    os.environ["NUMEXPR_NUM_THREADS"] = "1"
+                    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
                     import torch
                     try:
                         torch.set_num_threads(1)
@@ -54,20 +74,20 @@ class EmbeddingEngine:
                     except Exception:
                         pass
                     from sentence_transformers import SentenceTransformer
-                    self._model = SentenceTransformer(self.model_name)
+                    self._model = SentenceTransformer(self.model_name, device="cpu")
+                    _trim_memory()
         return self._model
 
-    def embed_documents(self, texts: List[str], batch_size: int = 8) -> np.ndarray:
+    def embed_documents(self, texts: List[str], batch_size: int = 4) -> np.ndarray:
         """
         Generates L2-normalized float32 embeddings for a list of document chunks.
-        Uses small batch size (8) and explicit memory collection for low-RAM (512 MiB) execution.
+        Uses small batch size (4) and explicit glibc memory trimming for low-RAM (512 MiB) execution.
         Returns: np.ndarray of shape (len(texts), dimension), dtype float32
         """
         if not texts:
             return np.empty((0, self.dimension), dtype=np.float32)
 
         import torch
-        import gc
 
         with torch.inference_mode():
             embeddings = self.model.encode(
@@ -77,7 +97,7 @@ class EmbeddingEngine:
                 show_progress_bar=False,
                 convert_to_numpy=True
             )
-        gc.collect()
+        _trim_memory()
         return embeddings.astype(np.float32)
 
     def embed_query(self, query: str) -> np.ndarray:
@@ -89,7 +109,6 @@ class EmbeddingEngine:
         if not query or not query.strip():
             raise ValueError("Query string cannot be empty.")
 
-        # BGE models recommend query instruction for retrieval tasks
         query_text = query.strip()
         if self.query_instruction and "bge" in self.model_name.lower():
             if not query_text.startswith("Represent this sentence"):
@@ -103,4 +122,5 @@ class EmbeddingEngine:
                 show_progress_bar=False,
                 convert_to_numpy=True
             )
+        _trim_memory()
         return embedding.astype(np.float32)
