@@ -103,7 +103,8 @@ class DocumentService:
         source: Optional[str] = None,
         authority: Optional[str] = None,
         source_url: Optional[str] = None,
-        pipeline_instance: Optional[Any] = None
+        pipeline_instance: Optional[Any] = None,
+        background_tasks: Optional[Any] = None
     ) -> DocumentRecord:
         """
         Complete transactional ingestion workflow for a newly uploaded PDF:
@@ -118,6 +119,7 @@ class DocumentService:
         9. Persist FAISS and metadata
         10. Update SQLite (status: INDEXED)
         11. Hot-reload RAG pipeline in-memory
+        12. Queue Hugging Face remote persistence in background
         """
         # Step 1: Validation
         self.validate_file(original_filename, file_bytes)
@@ -236,9 +238,12 @@ class DocumentService:
                 indexed_at=indexed_at
             )
 
-            # Step 8.5: Synchronize Knowledge Base snapshot to Hugging Face
+            # Step 8.5: Synchronize Knowledge Base snapshot to Hugging Face (in background if available)
             if self.storage_service.is_available():
-                self.storage_service.sync_snapshot(new_pdf_path=stored_path)
+                if background_tasks is not None and hasattr(background_tasks, "add_task"):
+                    background_tasks.add_task(self.storage_service.sync_snapshot, stored_path)
+                else:
+                    self.storage_service.sync_snapshot(new_pdf_path=stored_path)
 
             # Step 9: Hot-reload in-memory RAG pipeline if provided
             if pipeline_instance:

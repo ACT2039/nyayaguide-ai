@@ -138,7 +138,7 @@ async def ask_question(body: AskRequest, request: Request):
 # Document Management & Knowledge Base APIs (Admin Protected)
 # ──────────────────────────────────────────────
 from typing import Optional, List
-from fastapi import UploadFile, File, Form, Depends, HTTPException, status
+from fastapi import UploadFile, File, Form, Depends, HTTPException, status, BackgroundTasks
 from .auth import require_admin_key
 from .schemas import (
     DocumentRecord,
@@ -262,6 +262,7 @@ async def get_document_status(
 )
 async def upload_document(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="Government legal PDF file (max 20 MB)"),
     category: str = Form(..., description="Legal category: RTI, CONSUMER, CIVIC, EDUCATION, TRANSPORT, ENVIRONMENT, OTHER"),
     title: Optional[str] = Form(None, description="Official title of the Act, Rules, or Gazette"),
@@ -287,7 +288,8 @@ async def upload_document(
             source=source,
             authority=authority,
             source_url=source_url,
-            pipeline_instance=pipeline
+            pipeline_instance=pipeline,
+            background_tasks=background_tasks
         )
 
         return DocumentUploadResponse(

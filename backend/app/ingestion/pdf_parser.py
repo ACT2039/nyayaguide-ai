@@ -32,7 +32,10 @@ class PDFParser:
 
         # Primary extraction using PyMuPDF (fitz)
         try:
-            import fitz
+            try:
+                import pymupdf as fitz
+            except ImportError:
+                import fitz
             doc = fitz.open(file_path)
             total_pages = len(doc)
 
