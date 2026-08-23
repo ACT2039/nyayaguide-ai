@@ -247,9 +247,11 @@ class DocumentService:
                 chunk_count=len(chunks)
             )
 
-            # Step 3: BGE Embeddings
+            # Step 3: BGE Embeddings (batch_size=8 for 512 MiB RAM limit)
+            import gc
             texts = [c.text for c in chunks]
-            embeddings = self.embedding_engine.embed_documents(texts)
+            embeddings = self.embedding_engine.embed_documents(texts, batch_size=8)
+            gc.collect()
 
             if len(embeddings) != len(chunks):
                 raise RuntimeError(f"Embedding count mismatch: {len(embeddings)} vs {len(chunks)} chunks.")

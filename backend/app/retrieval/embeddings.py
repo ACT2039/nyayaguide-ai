@@ -57,15 +57,18 @@ class EmbeddingEngine:
                     self._model = SentenceTransformer(self.model_name)
         return self._model
 
-    def embed_documents(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
+    def embed_documents(self, texts: List[str], batch_size: int = 8) -> np.ndarray:
         """
         Generates L2-normalized float32 embeddings for a list of document chunks.
+        Uses small batch size (8) and explicit memory collection for low-RAM (512 MiB) execution.
         Returns: np.ndarray of shape (len(texts), dimension), dtype float32
         """
         if not texts:
             return np.empty((0, self.dimension), dtype=np.float32)
 
         import torch
+        import gc
+
         with torch.inference_mode():
             embeddings = self.model.encode(
                 texts,
@@ -74,6 +77,7 @@ class EmbeddingEngine:
                 show_progress_bar=False,
                 convert_to_numpy=True
             )
+        gc.collect()
         return embeddings.astype(np.float32)
 
     def embed_query(self, query: str) -> np.ndarray:

@@ -165,6 +165,12 @@ export const UploadDocumentModal: React.FC<UploadDocumentModalProps> = ({
             setLoading(false);
           }
         } catch (pollErr: any) {
+          const errMsg = String(pollErr?.message || pollErr || '');
+          if (errMsg.includes('404') || errMsg.includes('not found')) {
+            setError('Document record not found or processing was interrupted. Please try uploading again.');
+            setLoading(false);
+            return;
+          }
           attempts++;
           if (attempts < maxAttempts) {
             setTimeout(checkStatus, 3000);
